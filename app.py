@@ -18,6 +18,7 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 300))
 SIGNIN_TAIL = os.getenv("SIGNIN_TAIL")
 VERSION_TAIL = os.getenv("VERSION_TAIL")
 INDEX_TAIL = os.getenv("INDEX_TAIL")
+RESET_TAIL = os.getenv("RESET_TAIL")
 
 PAGE_AUTH_TOKEN = os.getenv("PAGE_AUTH_TOKEN")
 PAGE_INPUT_LOGIN = os.getenv("PAGE_INPUT_LOGIN")
@@ -131,6 +132,15 @@ def api_check():
         if data["mode"] in ("index", "both"):
             html = session.get(f"{srv['url']}{INDEX_TAIL}", timeout=REQUEST_TIMEOUT).text
             result["index"] = {
+                "services": parse(BeautifulSoup(html, "html.parser"))
+            }
+
+        # RESET
+        if data["mode"] == "reset":
+            if not RESET_TAIL:
+                return jsonify({"error": "RESET_TAIL is not configured in .env"})
+            html = session.get(f"{srv['url']}{RESET_TAIL}", timeout=REQUEST_TIMEOUT).text
+            result["reset"] = {
                 "services": parse(BeautifulSoup(html, "html.parser"))
             }
 
