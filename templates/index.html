@@ -30,9 +30,10 @@
     .btn-index { background: var(--accent); }
     .btn-version { background: #6040b0; }
     .btn-all { background: #0e639c; }
+    .btn-reset { background: #b5451b; }
     .btn-invert { background: none; border: 1px solid var(--border); color: var(--text-main); }
     .content { flex: 1; padding: 40px 20px; overflow-y: auto; display: flex; justify-content: center; background: var(--bg); }
-    .content-inner { width: 100%; max-width: 900px; }
+    .content-inner { width: 100%; max-width: 1060px; }
     .monitor-table { width: 100%; border-collapse: collapse; font-size: 15px; background: var(--surface); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
     .monitor-table th { text-align: left; padding: 16px; color: var(--muted); border-bottom: 1px solid var(--border); text-transform: uppercase; font-size: 12px; background: rgba(0, 0, 0, 0.2); }
     .monitor-table td { padding: 6px 12px 6px 12px; border-bottom: 1px solid var(--border); cursor: pointer; vertical-align: top; }
@@ -49,8 +50,9 @@
     .status-text { font-size: 12px; font-weight: 700; font-family: var(--mono); white-space: nowrap; }
     .text-ok { color: var(--ok); }
     .text-danger { color: var(--danger); }
+    .badge-warn { font-size: 10px; color: #cca700; border: 1px solid rgba(204, 167, 0, 0.45); border-radius: 3px; padding: 0 4px; margin-right: 4px; font-weight: 600; vertical-align: middle; }
     #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(2px); }
-    .modal { background: var(--surface); border: 1px solid var(--border); width: 950px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; border-radius: 8px; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6); }
+    .modal { background: var(--surface); border: 1px solid var(--border); width: 1100px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; border-radius: 8px; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6); }
     .modal-h { display: flex; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); }
     .modal-h b { font-size: 16px; color: var(--accent); }
     .modal-close { cursor: pointer; color: var(--muted); font-size: 24px; }
@@ -85,6 +87,7 @@
                 <button class="btn-index" onclick="run('index')">Index</button>
                 <button class="btn-version" onclick="run('version')">Versions</button>
                 <button class="btn-all" onclick="run('both')">Check All</button>
+                <button class="btn-reset" onclick="run('reset')">Reset</button>
                 <button class="btn-invert" onclick="toggle()">Invert</button>
             </div>
         </aside>
@@ -97,6 +100,7 @@
                             <th>Server</th>
                             <th class="col-fixed">Index</th>
                             <th class="col-fixed">Version</th>
+                            <th class="col-fixed">Reset</th>
                         </tr>
                     </thead>
                     <tbody id="grid"></tbody>
@@ -161,10 +165,15 @@
         async function run(mode) {
             const ids = [...document.querySelectorAll('input[name="srv"]:checked')].map(b => b.value);
             if (!ids.length) return;
+            if (mode === 'reset' && !confirm(`Выполнить RESET на выбранных серверах (${ids.length})?`)) return;
 
             const grid = document.getElementById('grid');
             grid.innerHTML = '';
             document.getElementById('stat').textContent = 'Running...';
+
+            const loadIdx = mode === 'index' || mode === 'both';
+            const loadVer = mode === 'version' || mode === 'both';
+            const loadRst = mode === 'reset';
 
             ids.forEach(id => {
                 const s = servers.find(x => x.id === id);
@@ -176,14 +185,20 @@
         </td>
         <td>
             <div class="status-cell">
-                <div class="dot loading" id="dot-idx-${id}"></div>
+                <div class="dot${loadIdx ? ' loading' : ''}" id="dot-idx-${id}"></div>
                 <span class="status-text" id="txt-idx-${id}"></span>
             </div>
         </td>
         <td>
             <div class="status-cell">
-                <div class="dot loading" id="dot-ver-${id}"></div>
+                <div class="dot${loadVer ? ' loading' : ''}" id="dot-ver-${id}"></div>
                 <span class="status-text" id="txt-ver-${id}"></span>
+            </div>
+        </td>
+        <td>
+            <div class="status-cell">
+                <div class="dot${loadRst ? ' loading' : ''}" id="dot-rst-${id}"></div>
+                <span class="status-text" id="txt-rst-${id}"></span>
             </div>
         </td>
       </tr>`);
@@ -201,28 +216,36 @@
 
                     const res = await response.json();
                     lastResults[id] = res;
-                    updateStatus(id, res);
+                    updateStatus(id, res, mode);
                 } catch (err) {
                     const errorData = { error: err.message || "Connection failed" };
                     lastResults[id] = errorData;
-                    updateStatus(id, errorData);
+                    updateStatus(id, errorData, mode);
                 }
             }));
             document.getElementById('stat').textContent = 'Last: ' + new Date().toLocaleTimeString();
         }
 
-        function updateStatus(id, data) {
+        function updateStatus(id, data, mode) {
             const dIdx = document.getElementById(`dot-idx-${id}`);
             const dVer = document.getElementById(`dot-ver-${id}`);
+            const dRst = document.getElementById(`dot-rst-${id}`);
             const tIdx = document.getElementById(`txt-idx-${id}`);
             const tVer = document.getElementById(`txt-ver-${id}`);
+            const tRst = document.getElementById(`txt-rst-${id}`);
 
             if (data.error) {
-                dIdx.className = dVer.className = 'dot danger';
-                tIdx.textContent = 'ERROR';
-                tIdx.className = 'status-text text-danger';
-                tVer.textContent = 'FAIL';
-                tVer.className = 'status-text text-danger';
+                if (mode === 'reset') {
+                    dRst.className = 'dot danger';
+                    tRst.textContent = 'ERROR';
+                    tRst.className = 'status-text text-danger';
+                } else {
+                    dIdx.className = dVer.className = 'dot danger';
+                    tIdx.textContent = 'ERROR';
+                    tIdx.className = 'status-text text-danger';
+                    tVer.textContent = 'FAIL';
+                    tVer.className = 'status-text text-danger';
+                }
                 return;
             }
 
@@ -245,6 +268,18 @@
             } else {
                 dVer.className = 'dot';
                 tVer.textContent = '';
+            }
+
+            if (data.reset?.services) {
+                const services = data.reset.services;
+                const ok = services.length > 0 && services.every(s => s.status === 'alert-success');
+                const missingReset = services.some(s => !/reset/i.test(`${s.name} ${s.detail}`));
+                dRst.className = 'dot ' + (ok ? 'ok' : 'danger');
+                tRst.innerHTML = (ok ? 'OK' : 'ISSUE') + (missingReset ? ' <span class="badge-warn" title="В части карточек нет упоминания reset">no reset</span>' : '');
+                tRst.className = 'status-text ' + (ok ? 'text-ok' : 'text-danger');
+            } else {
+                dRst.className = 'dot';
+                tRst.textContent = '';
             }
         }
 
@@ -292,7 +327,18 @@
             } else { verHtml += '<div class="row empty">No version data</div>'; }
             verHtml += '</div>';
 
-            content.innerHTML = idxHtml + verHtml;
+            let rstHtml = '<div class="modal-col"><div class="sec-t">Reset Status</div>';
+            if (data.reset?.services?.length) {
+                data.reset.services.forEach(i => {
+                    const ok = i.status === 'alert-success';
+                    const hasReset = /reset/i.test(`${i.name} ${i.detail}`);
+                    const marker = hasReset ? '' : '<span class="badge-warn" title="Нет упоминания reset">no reset</span>';
+                    rstHtml += `<div class="row ${ok ? 'ok' : 'danger'}" title="${i.name}: ${i.detail}">${marker}${i.name}: ${i.detail}</div>`;
+                });
+            } else { rstHtml += '<div class="row empty">No reset data</div>'; }
+            rstHtml += '</div>';
+
+            content.innerHTML = idxHtml + verHtml + rstHtml;
             document.getElementById('modal-overlay').style.display = 'flex';
         }
 
